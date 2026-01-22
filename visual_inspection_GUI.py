@@ -24,10 +24,10 @@ aruco_dict = _get_predefined_dict(aruco.DICT_ARUCO_ORIGINAL)
 parameters = _create_detector_params()
 
 
-# Assign each of 15 markers (ID 0-14) a stable random color with a bias toward green
+# Assign each of 8 markers (ID 0-7) a stable random color with a bias toward green
 # and a hard cap of 3 red markers. We iterate in random order so IDs that go red
 # change run to run, but stop once three reds are chosen.
-marker_ids = list(range(15))
+marker_ids = list(range(8))
 random.shuffle(marker_ids)
 marker_colors = {}
 max_red = 3
