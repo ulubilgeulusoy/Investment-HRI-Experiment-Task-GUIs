@@ -3,6 +3,7 @@ import cv2.aruco as aruco
 import time
 import random
 from datetime import datetime
+from pathlib import Path
 
 # OpenCV renamed a few ArUco helpers; keep compatibility with both APIs.
 def _get_predefined_dict(dict_id):
@@ -23,6 +24,44 @@ aruco_dict = _get_predefined_dict(aruco.DICT_ARUCO_ORIGINAL)
 # Define the parameters for the ArUco marker detection.
 parameters = _create_detector_params()
 
+def _prompt_ids():
+    """Pop a single GUI form for participant and trial IDs."""
+    try:
+        import tkinter as tk
+
+        result = {"participant": "", "trial": ""}
+
+        def on_submit():
+            result["participant"] = participant_entry.get().strip()
+            result["trial"] = trial_entry.get().strip()
+            window.destroy()
+
+        window = tk.Tk()
+        window.title("Session Info")
+        window.geometry("280x200")
+        window.resizable(False, False)
+
+        tk.Label(window, text="Participant ID:").pack(pady=(12, 2))
+        participant_entry = tk.Entry(window)
+        participant_entry.pack()
+        participant_entry.focus()
+
+        tk.Label(window, text="Trial number:").pack(pady=(10, 2))
+        trial_entry = tk.Entry(window)
+        trial_entry.pack()
+
+        tk.Button(window, text="Start", command=on_submit).pack(pady=12)
+
+        window.mainloop()
+        return result["participant"], result["trial"]
+    except Exception:
+        # Fallback to default if Tk fails (headless, etc.)
+        return "", ""
+
+# Identify the participant for this run and use it to tag outputs.
+participant_id, trial_number = _prompt_ids()
+participant_id = participant_id or "participant"
+trial_number = trial_number or "trial"
 
 # Assign each of 8 markers (ID 0-7) a stable random color with a bias toward green
 # and a hard cap of 3 red markers. We iterate in random order so IDs that go red
@@ -41,17 +80,18 @@ for marker_id in marker_ids:
     else:
         marker_colors[marker_id] = (0, 255, 0)  # green
 
-# Export the random assignments for later reference.
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-color_csv = f"marker_color_assignments_{timestamp}.csv"
+# Export the random assignments for later reference into CSV folder.
+csv_dir = Path(__file__).with_name("CSV")
+csv_dir.mkdir(exist_ok=True)
+color_csv = csv_dir / f"visual_{participant_id}_{trial_number}.csv"
 with open(color_csv, "w") as color_file:
-    color_file.write("marker_id,color_name,b,g,r\n")
+    color_file.write("marker_id,color_name\n")
     for marker_id, (b, g, r) in sorted(marker_colors.items()):
         color_name = "red" if (b, g, r) == (0, 0, 255) else "green"
         color_file.write(f"{marker_id},{color_name}\n")
 
 # Start the webcam feed
-cap = cv2.VideoCapture(1)  
+cap = cv2.VideoCapture(0)  
 
 # Variables to keep track of marker visibility times and the current marker ID
 marker_detected_at = None
