@@ -80,8 +80,8 @@ for marker_id in marker_ids:
     else:
         marker_colors[marker_id] = (0, 255, 0)  # green
 
-# Export the random assignments for later reference into CSV folder.
-csv_dir = Path(__file__).with_name("CSV")
+# Export the random assignments for later reference into a participant subfolder.
+csv_dir = Path(r"C:\CSV") / f"participant_{participant_id}"
 csv_dir.mkdir(exist_ok=True)
 color_csv = csv_dir / f"visual_{participant_id}_{trial_number}.csv"
 with open(color_csv, "w") as color_file:
@@ -91,7 +91,7 @@ with open(color_csv, "w") as color_file:
         color_file.write(f"{marker_id},{color_name}\n")
 
 # Start the webcam feed
-cap = cv2.VideoCapture(0)  
+cap = cv2.VideoCapture(1)  
 
 # Variables to keep track of marker visibility times and the current marker ID
 marker_detected_at = None

@@ -48,7 +48,7 @@ def prompt_session_ids():
 
 def load_reference(participant_id: str, trial_id: str):
     """Load the visual output CSV and derive expected marker colors/crack info."""
-    csv_dir = Path(__file__).with_name("CSV")
+    csv_dir = Path(r"C:\CSV") / f"participant_{participant_id}"
     csv_path = csv_dir / f"visual_{participant_id}_{trial_id}.csv"
     if not csv_path.exists():
         raise FileNotFoundError(f"Expected file not found: {csv_path.name}")
@@ -78,26 +78,22 @@ def load_reference(participant_id: str, trial_id: str):
 
 def load_leak_reference(participant_id: str, trial_id: str):
     """Load the leak reference CSV; file stores 1 or 0 indicating leak presence."""
-    csv_dir = Path(__file__).with_name("CSV")
+    csv_dir = Path(r"C:\CSV") / f"participant_{participant_id}"
     csv_path = csv_dir / f"leak_{participant_id}_{trial_id}.csv"
     if not csv_path.exists():
         raise FileNotFoundError(f"Expected file not found: {csv_path.name}")
 
     expected_leak = 0
     with csv_path.open(newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        reader = csv.reader(f)
         for row in reader:
-            # Try keys that likely encode leak state; fall back to first numeric value.
-            for key, val in row.items():
-                if val is None:
-                    continue
+            for val in row:
                 v = val.strip()
                 if v in ("0", "1"):
                     expected_leak = int(v)
                     break
-            else:
-                continue
-            break
+            if expected_leak in (0, 1):
+                break
 
     return {"path": csv_path, "expected_leak": expected_leak}
 
@@ -272,7 +268,7 @@ class TaskReportingApp(tk.Tk):
 
 if __name__ == "__main__":
     pid, tid = prompt_session_ids()
-    csv_dir = Path(__file__).with_name("CSV")
+    csv_dir = Path(r"C:\CSV") / f"participant_{pid}"
     csv_dir.mkdir(exist_ok=True)
     data_file = csv_dir / f"results_{pid}_{tid}.csv"
     try:
