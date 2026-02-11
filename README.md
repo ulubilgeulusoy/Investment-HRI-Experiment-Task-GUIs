@@ -1,63 +1,148 @@
 # Investment HRI Experiment Task GUIs
 
-Two Python GUIs for running and logging investment HRI / pipe inspection experiments:
+This repository contains two Python GUIs used in the pipe inspection HRI workflow:
 
-- `task_reporting_GUI.py`: a Tkinter form that records participant/trial IDs, binary leak/crack presence, and optional crack locations into a timestamped CSV.
-- `visual_inspection_GUI.py`: an OpenCV window that detects ArUco markers (IDs 0–14), highlights them with random green/red colors, logs which markers go red to a CSV, and records marker visibility intervals.
+- `visual_inspection_GUI.py` generates randomized marker color assignments and displays live ArUco detection from a webcam.
+- `task_reporting_GUI.py` collects participant responses, compares them to reference files, and writes a scored result CSV.
+
+## Repository Files
+
+- `visual_inspection_GUI.py`
+- `task_reporting_GUI.py`
+- `requirements.txt`
+- `GUIs/run_visual_inspection.bat`
+- `GUIs/run_task_reporting.bat`
 
 ## Requirements
-- Python 3.9+ (tested with the built-in `tkinter` on standard Python installs)
-- Packages: `opencv-contrib-python` (provides `cv2` and `cv2.aruco`)
-- A webcam for the visual inspection tool (update the device index in `cv2.VideoCapture(1)` if needed)
+
+- Python 3.9+
+- `tkinter` (included with standard Python on Windows)
+- `opencv-contrib-python` (includes `cv2` and `cv2.aruco`)
+- A webcam
 
 Install dependencies:
+
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-## BAT Launchers (Conda Required)
-The files below activate a Conda environment before launching the GUIs:
+## Output and Reference Folder
+
+Both GUIs read/write data in:
+
+- `C:\CSV\participant_<participant_id>`
+
+Example for participant `12`:
+
+- `C:\CSV\participant_12`
+
+## GUI 1: Visual Inspection
+
+Run:
+
+```bash
+python visual_inspection_GUI.py
+```
+
+### What it does
+
+1. Prompts for `participant_id` and `trial_number` in a small Tk window.
+2. Randomly assigns colors to marker IDs `0-7`:
+- green by default
+- red with probability bias, capped at 3 red markers
+3. Writes assignments to:
+- `C:\CSV\participant_<id>\visual_<id>_<trial>.csv`
+4. Opens webcam feed (`cv2.VideoCapture(1)`) and detects ArUco markers.
+5. Draws marker outlines and IDs using assigned colors.
+6. Tracks marker visibility intervals in memory (not written to disk).
+7. Exit with `q`.
+
+### Visual CSV format
+
+`visual_<id>_<trial>.csv`:
+
+```csv
+marker_id,color_name
+0,green
+1,red
+...
+```
+
+## GUI 2: Task Reporting
+
+Run:
+
+```bash
+python task_reporting_GUI.py
+```
+
+### Required reference files before running
+
+The script expects these files in `C:\CSV\participant_<id>`:
+
+- `visual_<id>_<trial>.csv` (from Visual Inspection GUI)
+- `leak_<id>_<trial>.csv` (contains a leak ground-truth value `0` or `1`)
+
+If either file is missing, the GUI exits with an error dialog.
+
+### What it does
+
+1. Prompts for `participant_id` and `trial_id`.
+2. Loads expected crack ground truth from `visual_<id>_<trial>.csv`:
+- expected crack = `1` if any marker is red, otherwise `0`
+3. Loads expected leak ground truth from `leak_<id>_<trial>.csv`.
+4. Shows a form with:
+- read-only participant/trial
+- leak present (`0/1`)
+- crack present (`0/1`)
+- red/green choice for each marker ID found in the visual CSV
+5. Validates all required fields.
+6. Computes score and saves one row to:
+- `C:\CSV\participant_<id>\results_<id>_<trial>.csv`
+7. Closes automatically after successful submit.
+
+### Scoring logic
+
+Total score is 100%:
+
+- Leak correct: `33.4%`
+- Crack-present value correct: `33.3%`
+- All marker colors correct: `33.3%`
+
+### Results CSV format
+
+`results_<id>_<trial>.csv` includes headers like:
+
+```csv
+timestamp,participant_id,trial_id,leak_present,crack_present,score_percent,marker_0,marker_1,...
+```
+
+## BAT Launchers (Conda)
+
+The launchers in `GUIs/` activate a Conda env named `computer_vision` and run the scripts:
 
 - `GUIs/run_visual_inspection.bat`
 - `GUIs/run_task_reporting.bat`
 
-They currently use:
+Current activation path inside both BAT files:
+
 ```bat
 call "C:\Users\investment\miniconda3\Scripts\activate.bat"
 call conda activate computer_vision
 ```
 
-Before using these `.bat` files, make sure:
-- Conda/Miniconda is installed.
-- You have created an environment named `computer_vision`.
-- `requirements.txt` is installed in that environment.
+If your Miniconda install path or environment name differs, edit both BAT files.
 
-Example setup:
+Example environment setup:
+
 ```powershell
 conda create -n computer_vision python=3.10 -y
 conda activate computer_vision
 pip install -r requirements.txt
 ```
 
-If your Miniconda path differs, edit the `activate.bat` line in both launcher files.
-
-## Usage
-
-### Task reporting GUI
-```bash
-python task_reporting_GUI.py
-```
-- Choose 0/1 for leak and crack; optional free text for crack locations (space-separated parts are split into fixed CSV columns).
-- Each run writes to `experiment_responses_YYYYMMDD_HHMMSS.csv` beside the script. A header row is added on first write.
-
-### Visual inspection GUI
-```bash
-python visual_inspection_GUI.py
-```
-- Press `q` to quit.
-- On startup, marker IDs 0–14 are randomly assigned green with a cap of 3 red markers; assignments are saved to `marker_color_assignments_YYYYMMDD_HHMMSS.csv`.
-- The webcam feed draws detected markers with their assigned colors and labels. Marker visibility intervals are tracked in-memory; extend the script to persist them if needed.
-
 ## Notes
-- Both scripts are standalone; no external config files are required.
-- Data files are timestamped per run to avoid overwriting prior results.
+
+- If ID fields are left blank, scripts fall back to default IDs (`participant` / `trial`).
+- `visual_inspection_GUI.py` uses compatibility helpers for multiple OpenCV ArUco API versions.
+- Camera index is currently `1`; change `cv2.VideoCapture(1)` if your webcam is on another index.
