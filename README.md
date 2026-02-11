@@ -7,13 +7,39 @@ Two Python GUIs for running and logging investment HRI / pipe inspection experim
 
 ## Requirements
 - Python 3.9+ (tested with the built-in `tkinter` on standard Python installs)
-- Packages: `opencv-python` (provides `cv2` and `cv2.aruco`)
+- Packages: `opencv-contrib-python` (provides `cv2` and `cv2.aruco`)
 - A webcam for the visual inspection tool (update the device index in `cv2.VideoCapture(1)` if needed)
 
 Install dependencies:
 ```bash
-python -m pip install opencv-python
+python -m pip install -r requirements.txt
 ```
+
+## BAT Launchers (Conda Required)
+The files below activate a Conda environment before launching the GUIs:
+
+- `GUIs/run_visual_inspection.bat`
+- `GUIs/run_task_reporting.bat`
+
+They currently use:
+```bat
+call "C:\Users\investment\miniconda3\Scripts\activate.bat"
+call conda activate computer_vision
+```
+
+Before using these `.bat` files, make sure:
+- Conda/Miniconda is installed.
+- You have created an environment named `computer_vision`.
+- `requirements.txt` is installed in that environment.
+
+Example setup:
+```powershell
+conda create -n computer_vision python=3.10 -y
+conda activate computer_vision
+pip install -r requirements.txt
+```
+
+If your Miniconda path differs, edit the `activate.bat` line in both launcher files.
 
 ## Usage
 

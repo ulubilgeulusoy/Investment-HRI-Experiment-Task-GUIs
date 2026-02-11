@@ -1,2 +1,10 @@
 # Ignore generated CSV outputs
 *.csv
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Conda
+.conda/
+.condarc
