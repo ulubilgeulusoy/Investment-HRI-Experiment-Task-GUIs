@@ -18,6 +18,14 @@ def _create_detector_params():
         return aruco.DetectorParameters_create()
     return aruco.DetectorParameters()
 
+def _detect_markers(gray_frame, aruco_dictionary, detector_parameters):
+    """Detect markers across old and new OpenCV ArUco APIs."""
+    if hasattr(aruco, "detectMarkers"):
+        return aruco.detectMarkers(gray_frame, aruco_dictionary, parameters=detector_parameters)
+
+    detector = aruco.ArucoDetector(aruco_dictionary, detector_parameters)
+    return detector.detectMarkers(gray_frame)
+
 # Define the dictionary of markers you are using.
 aruco_dict = _get_predefined_dict(aruco.DICT_ARUCO_ORIGINAL)
 
@@ -108,7 +116,7 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Detect the markers in the image
-    corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+    corners, ids, rejectedImgPoints = _detect_markers(gray, aruco_dict, parameters)
 
     # If any markers were found, draw them on the frame with assigned colors
     if ids is not None:

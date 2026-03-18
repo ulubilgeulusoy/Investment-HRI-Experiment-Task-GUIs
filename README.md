@@ -1,24 +1,29 @@
 # Investment HRI Experiment Task GUIs
 
-This repository contains two Python GUIs used in the pipe inspection HRI workflow:
+This repository contains three Python GUIs used in the pipe inspection HRI workflow:
 
 - `visual_inspection_GUI.py` generates randomized marker color assignments and displays live ArUco detection from a webcam.
 - `task_reporting_GUI.py` collects participant responses, compares them to reference files, and writes a scored result CSV.
+- `leak_check_GUI.py` connects to a Raspberry Pi over SSH, mounts a Windows SMB share on the Pi, launches the leak-check script remotely, and monitors its status/logs.
 
 ## Repository Files
 
 - `visual_inspection_GUI.py`
 - `task_reporting_GUI.py`
+- `leak_check_GUI.py`
 - `requirements.txt`
 - `GUIs/run_visual_inspection.bat`
 - `GUIs/run_task_reporting.bat`
+- `GUIs/run_leak_check_GUI.bat`
 
 ## Requirements
 
 - Python 3.9+
 - `tkinter` (included with standard Python on Windows)
 - `opencv-contrib-python` (includes `cv2` and `cv2.aruco`)
-- A webcam
+- `paramiko`
+- A webcam for `visual_inspection_GUI.py`
+- Network access from the Windows laptop to the Raspberry Pi for `leak_check_GUI.py`
 
 Install dependencies:
 
@@ -28,13 +33,21 @@ python -m pip install -r requirements.txt
 
 ## Output and Reference Folder
 
-Both GUIs read/write data in:
+The visual inspection and task reporting GUIs read/write participant data in:
 
 - `C:\CSV\participant_<participant_id>`
 
 Example for participant `12`:
 
 - `C:\CSV\participant_12`
+
+The leak-check workflow writes its leak CSV from the Raspberry Pi into a Windows SMB share mounted on the Pi at `/mnt/csv`. In the current setup, that Windows share is:
+
+- `\\192.168.0.51\CSV`
+
+When mounted on the Pi, leak result files are written under:
+
+- `/mnt/csv/participant_<participant_id>/leak_<participant_id>_<trial_number>.csv`
 
 ## GUI 1: Visual Inspection
 
@@ -44,17 +57,19 @@ Run:
 python visual_inspection_GUI.py
 ```
 
+Or double-click:
+
+- `GUIs/run_visual_inspection.bat`
+
 ### What it does
 
 1. Prompts for `participant_id` and `trial_number` in a small Tk window.
-2. Randomly assigns colors to marker IDs `0-7`:
-- green by default
-- red with probability bias, capped at 3 red markers
+2. Randomly assigns colors to marker IDs `0-7`.
 3. Writes assignments to:
-- `C:\CSV\participant_<id>\visual_<id>_<trial>.csv`
+   `C:\CSV\participant_<id>\visual_<id>_<trial>.csv`
 4. Opens webcam feed (`cv2.VideoCapture(1)`) and detects ArUco markers.
 5. Draws marker outlines and IDs using assigned colors.
-6. Tracks marker visibility intervals in memory (not written to disk).
+6. Tracks marker visibility intervals in memory.
 7. Exit with `q`.
 
 ### Visual CSV format
@@ -76,29 +91,28 @@ Run:
 python task_reporting_GUI.py
 ```
 
+Or double-click:
+
+- `GUIs/run_task_reporting.bat`
+
 ### Required reference files before running
 
 The script expects these files in `C:\CSV\participant_<id>`:
 
-- `visual_<id>_<trial>.csv` (from Visual Inspection GUI)
-- `leak_<id>_<trial>.csv` (contains a leak ground-truth value `0` or `1`)
+- `visual_<id>_<trial>.csv` from Visual Inspection
+- `leak_<id>_<trial>.csv` containing a leak ground-truth value `0` or `1`
 
 If either file is missing, the GUI exits with an error dialog.
 
 ### What it does
 
 1. Prompts for `participant_id` and `trial_id`.
-2. Loads expected crack ground truth from `visual_<id>_<trial>.csv`:
-- expected crack = `1` if any marker is red, otherwise `0`
+2. Loads expected crack ground truth from `visual_<id>_<trial>.csv`.
 3. Loads expected leak ground truth from `leak_<id>_<trial>.csv`.
-4. Shows a form with:
-- read-only participant/trial
-- leak present (`0/1`)
-- crack present (`0/1`)
-- red/green choice for each marker ID found in the visual CSV
+4. Shows a form for leak/crack presence and marker color choices.
 5. Validates all required fields.
 6. Computes score and saves one row to:
-- `C:\CSV\participant_<id>\results_<id>_<trial>.csv`
+   `C:\CSV\participant_<id>\results_<id>_<trial>.csv`
 7. Closes automatically after successful submit.
 
 ### Scoring logic
@@ -117,21 +131,117 @@ Total score is 100%:
 timestamp,participant_id,trial_id,leak_present,crack_present,score_percent,marker_0,marker_1,...
 ```
 
+## GUI 3: Leak Check
+
+Run:
+
+```bash
+python leak_check_GUI.py
+```
+
+Or double-click:
+
+- `GUIs/run_leak_check_GUI.bat`
+
+### What it does
+
+1. Connects from the Windows laptop to the Raspberry Pi over SSH using password authentication.
+2. Optionally mounts the Windows SMB share on the Pi at `/mnt/csv`.
+3. Runs preflight checks for:
+   the Pi conda init script, target folder, leak-check script, `python3`, `setsid`, and the mount point.
+4. Launches the Pi script inside the configured conda environment.
+5. Supplies `Participant ID` and `Trial` automatically to the remote script.
+6. Shows remote stdout/stderr snippets in the built-in log view.
+7. Lets the operator start, stop, kill, and check the remote process.
+
+### Current default Raspberry Pi settings
+
+- SSH host: `192.168.0.148`
+- SSH port: `22`
+- SSH username: `homemicro`
+- Pi conda init: `/home/homemicro/miniconda3/etc/profile.d/conda.sh`
+- Pi conda env: `chrps`
+- Remote folder:
+  `/home/homemicro/Investment Experiment/Investment Buzz Wire (old chrps folder)`
+- Remote script: `code_investment.py`
+- PID file: `/tmp/raspi_investment.pid`
+- Log file: `/tmp/raspi_investment.log`
+
+### Current default Windows share mount settings
+
+- Windows host: `192.168.0.51`
+- Share name: `CSV`
+- Windows username: `Investment`
+- Mount point on Pi: `/mnt/csv`
+- SMB version: `3.0`
+
+### Leak Check setup
+
+#### On the Windows laptop
+
+1. Make sure the folder you want to receive leak CSV files is shared over SMB.
+2. Confirm the Windows share is reachable as:
+   `\\192.168.0.51\CSV`
+3. Confirm the Windows username and password used by the Pi for mounting.
+
+#### On the Raspberry Pi
+
+1. Confirm SSH access works from the laptop.
+2. Confirm the experiment script runs manually from the Pi in the `chrps` conda environment.
+3. Install CIFS tools if needed:
+
+```bash
+sudo apt update
+sudo apt install cifs-utils -y
+```
+
+4. Confirm the mount point exists:
+
+```bash
+sudo mkdir -p /mnt/csv
+```
+
+5. Confirm the Pi can reach the Windows laptop:
+
+```bash
+ping -c 1 192.168.0.51
+```
+
+### Leak Check operator flow
+
+1. Launch `leak_check_GUI.py` or double-click `GUIs/run_leak_check_GUI.bat`.
+2. Enter the Raspberry Pi SSH password.
+3. Enter the Windows share password and Pi sudo password if needed.
+4. Click `Test Connection`.
+5. Click `Mount Share`.
+6. Enter `Participant ID` and `Trial`.
+7. Click `Start Experiment`.
+8. Use `Show Last Log`, `Check Status`, `Stop Experiment`, or `Kill Experiment` as needed.
+
+### Notes for Leak Check
+
+- `Mount Share` uses `sudo mount -t cifs` on the Raspberry Pi.
+- If `Pi sudo Password` is left blank, the GUI falls back to the SSH password.
+- If the share is already mounted, the GUI reports `ALREADY_MOUNTED /mnt/csv`.
+- The remote process is tracked with `/tmp/raspi_investment.pid`.
+- The GUI log shows the SSH command output, not a full live terminal stream.
+
 ## BAT Launchers (Conda)
 
 The launchers in `GUIs/` activate a Conda env named `computer_vision` and run the scripts:
 
 - `GUIs/run_visual_inspection.bat`
 - `GUIs/run_task_reporting.bat`
+- `GUIs/run_leak_check_GUI.bat`
 
-Current activation path inside both BAT files:
+Current activation path inside the BAT files:
 
 ```bat
 call "C:\Users\investment\miniconda3\Scripts\activate.bat"
 call conda activate computer_vision
 ```
 
-If your Miniconda install path or environment name differs, edit both BAT files.
+If your Miniconda install path or environment name differs, edit the BAT files.
 
 Example environment setup:
 
@@ -143,6 +253,6 @@ pip install -r requirements.txt
 
 ## Notes
 
-- If ID fields are left blank, scripts fall back to default IDs (`participant` / `trial`).
 - `visual_inspection_GUI.py` uses compatibility helpers for multiple OpenCV ArUco API versions.
-- Camera index is currently `1`; change `cv2.VideoCapture(1)` if your webcam is on another index.
+- Camera index in `visual_inspection_GUI.py` is currently `1`; change `cv2.VideoCapture(1)` if needed.
+- `leak_check_GUI.py` relies on password-based SSH through `paramiko`.
