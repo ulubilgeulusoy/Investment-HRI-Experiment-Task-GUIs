@@ -149,10 +149,71 @@ Or double-click:
 2. Optionally mounts the Windows SMB share on the Pi at `/mnt/csv`.
 3. Runs preflight checks for:
    the Pi conda init script, target folder, leak-check script, `python3`, `setsid`, and the mount point.
-4. Launches the Pi script inside the configured conda environment.
+4. Launches the Raspberry Pi leak-check script inside the configured conda environment.
 5. Supplies `Participant ID` and `Trial` automatically to the remote script.
 6. Shows remote stdout/stderr snippets in the built-in log view.
 7. Lets the operator start, stop, kill, and check the remote process.
+
+### Raspberry Pi script
+
+The GUI does not perform the leak-check logic itself. It starts a separate Python script on the Raspberry Pi, currently configured as:
+
+- `code_investment.py`
+
+This Raspberry Pi script is the hardware-facing experiment script. It runs on the Pi, talks to the GPIO and MPR121 touch sensor, plays the audio cues, and writes the leak ground-truth CSV used later by the task-reporting workflow.
+
+### How the Raspberry Pi script works
+
+At a high level, the Pi-side script does the following:
+
+1. Prompts for `Participant ID` and `Trial number`.
+2. Checks whether the Windows SMB share is actually mounted at `/mnt/csv`.
+3. Chooses the CSV output directory:
+   - `/mnt/csv` if the Windows share is mounted
+   - otherwise the local script folder on the Pi
+4. Creates:
+   - `participant_<participant_id>/leak_<participant_id>_<trial_number>.csv`
+5. Initializes Raspberry Pi GPIO inputs:
+   - main button on BCM pin `17`
+   - reset button on BCM pin `27`
+6. Uses the MPR121 capacitive touch sensor over I2C.
+7. Loads audio assets for:
+   - touch notification
+   - system notification
+   - recalibration
+   - leak / no-leak outcome audio
+8. Waits for button/touch interaction during the experiment.
+
+### Raspberry Pi interaction logic
+
+The script behavior is roughly:
+
+1. On first button press, it initializes and calibrates the MPR121 sensor.
+2. Once sensor monitoring is enabled, a touch on an electrode starts a looping notification sound.
+3. A short button press while sound is playing stops that sound.
+4. A long button hold (`>= 2` seconds) triggers the leak/no-leak outcome:
+   - randomly chooses `1` for leak or `0` for no leak
+   - writes that single value to the leak CSV
+   - plays the corresponding audio clip
+5. The reset button can reinitialize the sensor again.
+
+### Raspberry Pi script output
+
+The CSV written by the Pi-side leak script contains a single row with the leak ground-truth value:
+
+```csv
+1
+```
+
+or
+
+```csv
+0
+```
+
+This file is later consumed by `task_reporting_GUI.py` as:
+
+- `leak_<participant_id>_<trial_number>.csv`
 
 ### Current default Raspberry Pi settings
 
@@ -166,6 +227,8 @@ Or double-click:
 - Remote script: `code_investment.py`
 - PID file: `/tmp/raspi_investment.pid`
 - Log file: `/tmp/raspi_investment.log`
+
+These settings are for the Windows-side launcher GUI. The actual experiment execution happens on the Raspberry Pi after SSH connection and remote launch.
 
 ### Current default Windows share mount settings
 
