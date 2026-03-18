@@ -230,6 +230,17 @@ This file is later consumed by `task_reporting_GUI.py` as:
 
 These settings are for the Windows-side launcher GUI. The actual experiment execution happens on the Raspberry Pi after SSH connection and remote launch.
 
+### IP address note
+
+The IP addresses shown in this README are example values from the current setup and may be different in another lab, router, or session.
+
+In particular, check these before running:
+
+- Raspberry Pi SSH host, currently `192.168.0.148`
+- Windows SMB host, currently `192.168.0.51`
+
+If your network assigns different addresses, update the GUI fields to match your current environment.
+
 ### Current default Windows share mount settings
 
 - Windows host: `192.168.0.51`
@@ -288,6 +299,245 @@ ping -c 1 192.168.0.51
 - If the share is already mounted, the GUI reports `ALREADY_MOUNTED /mnt/csv`.
 - The remote process is tracked with `/tmp/raspi_investment.pid`.
 - The GUI log shows the SSH command output, not a full live terminal stream.
+
+### Full Raspberry Pi script (`code_investment.py`)
+
+```python
+# SPDX-FileCopyrightText: 2017 Tony DiCola for Adafruit Industries
+# SPDX-License-Identifier: MIT
+
+# Simple test of the MPR121 capacitive touch sensor library.
+# Will print out a message when any of the 12 capacitive touch inputs of the
+# board are touched.  Open the serial REPL after running to see the output.
+# Author: Tony DiCola
+import os
+import time
+import csv
+import re
+import board
+import busio
+import time
+
+from pydub import AudioSegment
+from pydub.playback import play
+import random
+
+from tkinter import *
+
+import RPi.GPIO as GPIO
+
+import pygame
+
+# --- Windows share target (mounted SMB share) ---
+WINDOWS_MOUNT = "/mnt/csv"
+
+def _windows_share_ready(path=WINDOWS_MOUNT):
+    """
+    Returns True only if the mount exists AND is actually mounted.
+    This prevents silently writing to local /mnt/csv when mount is down.
+    """
+    try:
+        if not os.path.isdir(path):
+            return False
+        # Linux: check if it's a mount point (works well for SMB mounts)
+        return os.path.ismount(path)
+    except Exception:
+        return False
+
+
+
+pygame.mixer.init()
+sound = pygame.mixer.Sound("/home/homemicro/Documents/chrps/chrps/noti_beep.wav")
+sound2 = pygame.mixer.Sound("/home/homemicro/Documents/chrps/chrps/system-noti.wav")
+sound3 = pygame.mixer.Sound("/home/homemicro/Documents/chrps/chrps/recalibrated.wav")
+leak_sound = AudioSegment.from_file(
+    "/home/homemicro/Investment Experiment/Investment Buzz Wire (old chrps folder)/leak.m4a"
+)+15
+no_leak_sound = AudioSegment.from_file(
+    "/home/homemicro/Investment Experiment/Investment Buzz Wire (old chrps folder)/no_leak.m4a"
+)+15
+
+# import required module
+# from playsound import playsound
+
+
+# Import MPR121 module.
+import adafruit_mpr121
+
+""" # Create I2C bus.
+i2c = busio.I2C(board.SCL, board.SDA)
+
+# Create MPR121 object.
+mpr121 = adafruit_mpr121.MPR121(i2c) """
+
+def configure_mpr121(running=False):
+    global mpr121
+    # Create I2C bus.
+    i2c = busio.I2C(board.SCL, board.SDA)
+
+    # Create MPR121 object.
+    mpr121 = adafruit_mpr121.MPR121(i2c)
+
+    touch_threshold = 16
+    release_threshold = 6
+
+    for i in range(12):
+        mpr121[i].threshold = touch_threshold
+        mpr121[i].release_threshold = release_threshold
+    time.sleep(0.1)
+    for i in range(12):
+         print(f"Electrode {i}, Baseline = {mpr121.baseline_data(i)}, Filtered = {mpr121.filtered_data(i)}")
+
+    # for i in range(1):
+    #     sound2.play()
+    #     time.sleep(.5)
+    if running:
+        sound3.play()
+
+
+# Note you can optionally change the address of the device:
+# mpr121 = adafruit_mpr121.MPR121(i2c, address=0x91)
+
+# Write latest leak/no-leak decision to a CSV (1 = leak, 0 = no leak).
+RESULTS_CSV = None
+
+
+def _sanitize_token(token):
+    token = token.strip()
+    token = re.sub(r"\s+", "_", token)
+    return re.sub(r"[^A-Za-z0-9_-]", "", token)
+
+
+def export_leak_result(value):
+    if RESULTS_CSV is None:
+        raise RuntimeError("RESULTS_CSV not set. Provide participant ID and trial number.")
+    with open(RESULTS_CSV, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([value])
+
+
+# Loop forever testing each input and printing when they're touched.
+count = 0
+# song = AudioSegment.from_wav("/home/homemicro/Documents/chrps/chrps/ping.wav")
+# song2 = AudioSegment.from_wav("/home/homemicro/Documents/chrps/chrps/system-noti.wav")
+
+# playsound('/home/homemicro/Documents/chrps/nope.wav')
+print('playing sound using  playsound')
+
+GPIO.setmode(GPIO.BCM)
+button_pin = 17
+reset_button_pin = 27
+GPIO.setup(button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(reset_button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+try:
+    participant_id = _sanitize_token(input("Participant ID: "))
+    trial_number = _sanitize_token(input("Trial number: "))
+    if not participant_id or not trial_number:
+        raise ValueError("Participant ID and trial number are required.")
+        # Decide output directory:
+    # Prefer Windows-mounted share, otherwise fall back to local script folder
+    if _windows_share_ready(WINDOWS_MOUNT):
+        base_out_dir = WINDOWS_MOUNT
+    else:
+        base_out_dir = os.path.dirname(__file__)
+        print(f"[WARN] Windows share not mounted at {WINDOWS_MOUNT}. Writing CSV locally to: {base_out_dir}")
+
+    # Optional: keep data organized in a participant folder
+    participant_folder = os.path.join(base_out_dir, f"participant_{participant_id}")
+    os.makedirs(participant_folder, exist_ok=True)
+
+    RESULTS_CSV = os.path.join(
+        participant_folder,
+        f"leak_{participant_id}_{trial_number}.csv",
+    )
+
+
+    playing = False
+    sensor_enabled = False
+    initialized_once = False
+    last_button_state = GPIO.HIGH
+    button_press_start = None
+
+    while True:
+
+        if sensor_enabled:
+            for i in range(12):
+                if mpr121[i].value and not playing:
+                    print(f"Playing sound on touch {i}")
+                    print(f"Electrode {i}: {mpr121.baseline_data(i)} (Baseline), {mpr121.filtered_data(i)} Filtered")
+                    sound.play(loops=-1)
+                    playing = True
+
+        button_state = GPIO.input(button_pin)
+        if button_state == GPIO.LOW and last_button_state == GPIO.HIGH:
+            button_press_start = time.time()
+        if button_state == GPIO.HIGH and last_button_state == GPIO.LOW:
+            press_duration = 0
+            if button_press_start is not None:
+                press_duration = time.time() - button_press_start
+            button_press_start = None
+
+            if not initialized_once:
+                print("Button pressed! Init sensor")
+                configure_mpr121(True)
+                sensor_enabled = True
+                initialized_once = True
+            else:
+                if playing:
+                    print("Button pressed! Stopping sound")
+                    sound.stop()
+                    playing = False
+                elif press_duration >= 2:
+                    print("Button held! Playing leak/no-leak sound")
+                    leak_value = random.choice([1, 0])
+                    export_leak_result(leak_value)
+                    play(leak_sound if leak_value == 1 else no_leak_sound)
+                    sensor_enabled = False
+                    initialized_once = False
+                    playing = False
+        last_button_state = button_state
+
+        if GPIO.input(reset_button_pin) == GPIO.LOW:
+            print("Init sensor")
+            configure_mpr121(True)
+
+        time.sleep(0.01)
+
+        """ # Loop through all 12 inputs (0-11).
+        for i in range(12):
+            # Call is_touched and pass it then number of the input.  If it's touched
+            # it will return True, otherwise it will return False.
+            if mpr121[i].value:
+                print("Input {} touched!".format(i))
+                print(count)
+                if i == 0:
+                    while True:
+                        print("if")
+                        #play(song)
+                        sound.play()
+                        time.sleep(2)
+                        button_state = GPIO.input(button_pin)
+                        if button_state == GPIO.LOW:
+                            print('Button Pressed!')
+                            break
+                    # snd.play(blocking=1)
+                    # playsound('/home/homemicro/Documents/chrps/chrps/nope.wav')
+
+                else:
+
+                    print("Else")
+                    sound.play()
+                    #play(song2)
+                    # snd1.play(blocking=1)
+                    # playsound('/home/homemicro/Documents/chrps/chrps/nope.wav')
+
+                count = count + 1 """
+
+except KeyboardInterrupt:
+    print('Exiting program...')
+    GPIO.cleanup()
+```
 
 ## BAT Launchers (Conda)
 
