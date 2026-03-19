@@ -68,6 +68,46 @@ def _build_waiting_frame(window_name: str):
     return frame
 
 
+def _open_camera(device_index: int):
+    """Open the camera using Windows backends that usually initialize fastest."""
+    backends = []
+    if hasattr(cv2, "CAP_DSHOW"):
+        backends.append(("DirectShow", cv2.CAP_DSHOW))
+    if hasattr(cv2, "CAP_MSMF"):
+        backends.append(("Media Foundation", cv2.CAP_MSMF))
+    backends.append(("Default backend", cv2.CAP_ANY))
+
+    last_error = None
+    for backend_name, backend in backends:
+        try:
+            cap = cv2.VideoCapture(device_index, backend)
+        except Exception as exc:
+            last_error = exc
+            continue
+
+        if not cap or not cap.isOpened():
+            if cap:
+                cap.release()
+            continue
+
+        # Ask the camera for MJPG first; many USB webcams negotiate this faster.
+        try:
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        except Exception:
+            pass
+
+        # A tiny warm-up read confirms the backend really works before we commit.
+        ok, _ = cap.read()
+        if ok:
+            return cap, backend_name
+
+        cap.release()
+
+    if last_error is not None:
+        raise RuntimeError(f"Unable to open camera {device_index}: {last_error}") from last_error
+    raise RuntimeError(f"Unable to open camera {device_index}.")
+
+
 def _confirm_close_visual_inspection() -> bool:
     root = tk.Tk()
     root.withdraw()
@@ -127,8 +167,13 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
     _bring_window_to_front(window_name)
     cv2.waitKey(1)
 
-    # Start the webcam feed
-    cap = cv2.VideoCapture(1)
+    # Start the webcam feed. On Windows, forcing a backend can avoid very slow
+    # camera enumeration/initialization on some machines.
+    try:
+        cap, backend_name = _open_camera(1)
+    except RuntimeError as exc:
+        cv2.destroyAllWindows()
+        raise SystemExit(str(exc)) from exc
 
     # Variables to keep track of marker visibility times and the current marker ID
     marker_detected_at = None
@@ -137,6 +182,10 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
     window_brought_forward = False
     pending_close_confirmation = False
     last_frame = _build_waiting_frame(window_name)
+    try:
+        cv2.displayOverlay(window_name, f"Camera opened with {backend_name}", 1500)
+    except Exception:
+        pass
 
     while True:
         # Capture frame-by-frame
