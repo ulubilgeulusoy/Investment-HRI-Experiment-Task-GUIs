@@ -1,7 +1,10 @@
 import argparse
+import ctypes
 from pathlib import Path
 import random
 import time
+import tkinter as tk
+from tkinter import messagebox
 
 import cv2
 import cv2.aruco as aruco
@@ -27,6 +30,57 @@ def _detect_markers(gray_frame, aruco_dictionary, detector_parameters):
     detector = aruco.ArucoDetector(aruco_dictionary, detector_parameters)
     return detector.detectMarkers(gray_frame)
 
+
+def _bring_window_to_front(window_name: str) -> None:
+    """Best-effort attempt to foreground the OpenCV window on Windows."""
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, window_name)
+        if hwnd:
+            user32.ShowWindow(hwnd, 5)  # SW_SHOW
+            user32.SetForegroundWindow(hwnd)
+    except Exception:
+        pass
+
+
+def _position_window_on_right(window_name: str, width: int, height: int) -> None:
+    """Place the window near the top-right of the primary display."""
+    try:
+        user32 = ctypes.windll.user32
+        screen_width = user32.GetSystemMetrics(0)
+        x = max(0, screen_width - width - 60)
+        y = 60
+        cv2.resizeWindow(window_name, width, height)
+        cv2.moveWindow(window_name, x, y)
+    except Exception:
+        try:
+            cv2.resizeWindow(window_name, width, height)
+        except Exception:
+            pass
+
+
+def _build_waiting_frame(window_name: str):
+    frame = 255 * (cv2.UMat(540, 960, cv2.CV_8UC3).get() * 0)
+    frame[:] = (245, 245, 245)
+    cv2.putText(frame, "Visual Inspection", (260, 210), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (40, 40, 40), 2, cv2.LINE_AA)
+    cv2.putText(frame, "Opening camera, please wait...", (250, 280), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (80, 80, 80), 2, cv2.LINE_AA)
+    cv2.putText(frame, "Use the window X button to close.", (255, 335), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (110, 110, 110), 2, cv2.LINE_AA)
+    return frame
+
+
+def _confirm_close_visual_inspection() -> bool:
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        return messagebox.askyesno(
+            "Confirm Exit",
+            "Are you sure you want to close the visual inspection window?",
+            parent=root,
+        )
+    finally:
+        root.destroy()
+
 # Define the dictionary of markers you are using.
 aruco_dict = _get_predefined_dict(aruco.DICT_ARUCO_ORIGINAL)
 
@@ -36,6 +90,9 @@ parameters = _create_detector_params()
 def run_visual_inspection(participant_id: str, trial_number: str) -> None:
     participant_id = participant_id or "participant"
     trial_number = trial_number or "trial"
+    window_name = "Visual Inspection"
+    initial_width = 1100
+    initial_height = 760
 
     # Assign each of 8 markers (ID 0-7) a stable random color with a bias toward green
     # and a hard cap of 3 red markers. We iterate in random order so IDs that go red
@@ -64,6 +121,12 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
             color_name = "red" if (b, g, r) == (0, 0, 255) else "green"
             color_file.write(f"{marker_id},{color_name}\n")
 
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.imshow(window_name, _build_waiting_frame(window_name))
+    _position_window_on_right(window_name, initial_width, initial_height)
+    _bring_window_to_front(window_name)
+    cv2.waitKey(1)
+
     # Start the webcam feed
     cap = cv2.VideoCapture(1)
 
@@ -71,6 +134,9 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
     marker_detected_at = None
     visibility_intervals = []
     current_marker_id = None  # Variable to store the marker ID when detected
+    window_brought_forward = False
+    pending_close_confirmation = False
+    last_frame = _build_waiting_frame(window_name)
 
     while True:
         # Capture frame-by-frame
@@ -103,11 +169,28 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
                 current_marker_id = None
 
         # Display the resulting frame
-        cv2.imshow("frame", frame)
-        cv2.moveWindow("frame", 100, 100)  # This moves the window to (100, 100) coordinates
+        last_frame = frame
+        cv2.imshow(window_name, frame)
+        if not window_brought_forward:
+            _bring_window_to_front(window_name)
+            window_brought_forward = True
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+        cv2.waitKey(1)
+        try:
+            window_visible = cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1
+        except Exception:
+            window_visible = False
+
+        if not window_visible and not pending_close_confirmation:
+            pending_close_confirmation = True
+            if _confirm_close_visual_inspection():
+                break
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            _position_window_on_right(window_name, initial_width, initial_height)
+            cv2.imshow(window_name, last_frame)
+            _bring_window_to_front(window_name)
+            cv2.waitKey(1)
+            pending_close_confirmation = False
 
     # Handle the case when the marker is still visible when the video feed ends
     if marker_detected_at is not None:

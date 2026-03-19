@@ -82,6 +82,7 @@ class TaskReportingApp(tk.Tk):
         self.data_file = data_file
 
         self._build_ui()
+        self.protocol("WM_DELETE_WINDOW", self.on_close_request)
 
     def _build_ui(self) -> None:
         header = tk.Label(
@@ -231,6 +232,14 @@ class TaskReportingApp(tk.Tk):
             score += 33.3
 
         return score
+
+    def on_close_request(self) -> None:
+        if messagebox.askyesno(
+            "Confirm Exit",
+            "Are you sure you want to close the task reporting window without submitting?",
+            parent=self,
+        ):
+            self.destroy()
 
 
 if __name__ == "__main__":
