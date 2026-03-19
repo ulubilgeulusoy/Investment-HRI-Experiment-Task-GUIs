@@ -84,7 +84,6 @@ class CombinedExperimentApp:
         self.windows_user = tk.StringVar(value="Investment")
         self.windows_password = tk.StringVar(value="")
         self.mount_point = tk.StringVar(value="/mnt/csv")
-        self.sudo_password = tk.StringVar(value="")
         self.mount_version = tk.StringVar(value="3.0")
 
         self.participant_id = tk.StringVar(value="")
@@ -210,12 +209,8 @@ class CombinedExperimentApp:
         ttk.Entry(mount_frame, textvariable=self.mount_point, width=24).grid(row=2, column=1, sticky="ew", padx=8, pady=5)
         ttk.Label(mount_frame, text="SMB Version").grid(row=2, column=2, sticky="w", pady=5)
         ttk.Entry(mount_frame, textvariable=self.mount_version, width=20).grid(row=2, column=3, sticky="ew", padx=8, pady=5)
-        ttk.Label(mount_frame, text="Pi sudo Password").grid(row=3, column=2, sticky="w", pady=5)
-        ttk.Entry(mount_frame, textvariable=self.sudo_password, width=20, show="*").grid(
-            row=3, column=3, sticky="ew", padx=8, pady=5
-        )
         mount_buttons = ttk.Frame(mount_frame)
-        mount_buttons.grid(row=0, column=4, rowspan=4, sticky="ns", padx=(16, 0), pady=5)
+        mount_buttons.grid(row=0, column=4, rowspan=3, sticky="ns", padx=(16, 0), pady=5)
         ttk.Button(mount_buttons, text="Mount Share", command=self.mount_share).pack(fill="x")
         ttk.Button(mount_buttons, text="Check Mount Status", command=self.refresh_mount_status).pack(fill="x", pady=(6, 0))
         ttk.Button(mount_buttons, text="Dismount", command=self.dismount_share).pack(fill="x", pady=(6, 0))
@@ -499,7 +494,7 @@ class CombinedExperimentApp:
         windows_user = self.windows_user.get().strip()
         windows_password = self.windows_password.get()
         mount_point = self.mount_point.get().strip()
-        sudo_password = self.sudo_password.get() or self.ssh_password.get()
+        sudo_password = self.ssh_password.get()
         mount_version = self.mount_version.get().strip() or "3.0"
 
         if not windows_host or not windows_share or not windows_user or not windows_password or not mount_point:
@@ -809,7 +804,7 @@ class CombinedExperimentApp:
 
     def _build_dismount_command(self):
         mount_point = self.mount_point.get().strip()
-        sudo_password = self.sudo_password.get() or self.ssh_password.get()
+        sudo_password = self.ssh_password.get()
         if not mount_point:
             raise ValueError("Mount point is required.")
 
