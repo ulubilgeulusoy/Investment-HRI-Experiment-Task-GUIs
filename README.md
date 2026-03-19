@@ -1,24 +1,54 @@
 # Combined Investment Experiment GUI
 
-This repository is centered on the combined two-stage experiment launcher:
+This repository is now centered on the combined two-stage experiment launcher:
 
 - `combined_experiment_GUI.py`
 
-The combined GUI brings the full workflow into one application:
+The combined GUI brings the full workflow into one application while still using the same underlying experiment pieces:
 
-1. Stage 1 handles Raspberry Pi SSH connection and Windows share mount setup.
-2. Stage 2 collects participant/trial values once and provides launch controls for:
-   - leak check
-   - visual inspection
-   - task reporting
+- leak check on the Raspberry Pi
+- visual inspection on the Windows machine
+- task reporting on the Windows machine
 
-## Main Files
+## Repository Layout
+
+### Main Combined Application
 
 - `combined_experiment_GUI.py`
 - `combined_visual_inspection_GUI.py`
 - `combined_task_reporting_GUI.py`
 - `run_combined_experiment.bat`
 - `requirements.txt`
+
+### Archive Folder
+
+The `archive/` folder contains the older standalone version of the project, including:
+
+- `archive/leak_check_GUI.py`
+- `archive/visual_inspection_GUI.py`
+- `archive/task_reporting_GUI.py`
+- `archive/run_leak_check.bat`
+- `archive/run_visual_inspection.bat`
+- `archive/run_task_reporting.bat`
+- `archive/README.md`
+
+Those files are kept for reference and fallback use. The root of the repo reflects the newer combined application workflow.
+
+## Requirements
+
+- Python 3.9+
+- `tkinter` (included with standard Python on Windows)
+- `opencv-contrib-python` (includes `cv2` and `cv2.aruco`)
+- `paramiko`
+- a webcam for visual inspection
+- network access from the Windows laptop to the Raspberry Pi
+- access to the Windows SMB share used for CSV storage
+
+Install dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
 
 ## How To Launch
 
@@ -39,12 +69,14 @@ Note:
 
 ## Combined GUI Overview
 
+The combined GUI works in two stages.
+
 ### Stage 1: SSH + Mount Setup
 
-This stage is used before running participant trials. It lets the operator:
+This stage is used before participant trials begin. It lets the operator:
 
 - connect to the Raspberry Pi over SSH
-- check whether the SMB mount is active
+- verify whether the SMB mount is active
 - mount the Windows CSV share
 - dismount the share if needed
 - review setup logs in the GUI
@@ -69,44 +101,305 @@ This stage is used during the experiment session. It lets the operator:
 
 The combined GUI is designed so participant/trial values are entered once and then reused by the combined task GUIs.
 
-## Data Flow
+## Data Output and Reference Folder
 
-The visual inspection and task reporting workflows use:
+The visual inspection and task reporting workflows read and write participant data in:
 
 - `C:\CSV\participant_<participant_id>`
 
+Example for participant `12`:
+
+- `C:\CSV\participant_12`
+
 Typical files include:
 
-- `visual_<participant>_<trial>.csv`
-- `leak_<participant>_<trial>.csv`
-- `results_<participant>_<trial>.csv`
+- `visual_<participant_id>_<trial_number>.csv`
+- `leak_<participant_id>_<trial_number>.csv`
+- `results_<participant_id>_<trial_number>.csv`
 
-The leak-check workflow writes its result through the Raspberry Pi to the mounted Windows share.
+The leak-check workflow writes its leak CSV from the Raspberry Pi into a Windows SMB share mounted on the Pi at `/mnt/csv`. In the current setup, that Windows share is:
 
-## Requirements
+- `\\192.168.0.51\CSV`
 
-- Python 3.9+
-- `tkinter`
-- `opencv-contrib-python`
-- `paramiko`
-- access to the Raspberry Pi over SSH
-- access to the Windows SMB share used for CSV storage
-- a webcam for visual inspection
+When mounted on the Pi, leak result files are written under:
 
-Install dependencies with:
+- `/mnt/csv/participant_<participant_id>/leak_<participant_id>_<trial_number>.csv`
 
-```bash
-python -m pip install -r requirements.txt
+## Visual Inspection Details
+
+In the combined workflow, visual inspection is launched from stage 2 and receives participant/trial values from the combined GUI.
+
+### What it does
+
+1. Uses the participant number and trial number already entered in the combined GUI.
+2. Randomly assigns colors to marker IDs `0-7`.
+3. Writes assignments to:
+   `C:\CSV\participant_<id>\visual_<id>_<trial>.csv`
+4. Opens webcam feed (`cv2.VideoCapture(1)`) and detects ArUco markers.
+5. Draws marker outlines and IDs using the assigned colors.
+6. Tracks marker visibility intervals in memory.
+7. Exits when the user presses `q` in the OpenCV window.
+
+### Visual CSV format
+
+`visual_<id>_<trial>.csv`:
+
+```csv
+marker_id,color_name
+0,green
+1,red
+...
 ```
 
-## Archive Folder
+### Notes
 
-The `archive/` folder contains the older standalone version of the project, including:
+- the combined version removes the old participant/trial prompt window
+- camera index is currently `1`; change `cv2.VideoCapture(1)` if another camera index is correct on your machine
+- the script includes compatibility helpers for multiple OpenCV ArUco API versions
 
-- `leak_check_GUI.py`
-- `visual_inspection_GUI.py`
-- `task_reporting_GUI.py`
-- the original standalone `.bat` launchers
-- the previous README documenting that standalone layout
+## Task Reporting Details
 
-Those files are kept for reference and fallback use, while the root of the repo now reflects the combined application workflow.
+In the combined workflow, task reporting is launched from stage 2 and receives participant/trial values from the combined GUI.
+
+### Required reference files before running
+
+The script expects these files in `C:\CSV\participant_<id>`:
+
+- `visual_<id>_<trial>.csv` from visual inspection
+- `leak_<id>_<trial>.csv` containing a leak ground-truth value `0` or `1`
+
+If either file is missing, the GUI exits with an error dialog.
+
+### What it does
+
+1. Uses the participant number and trial number already entered in the combined GUI.
+2. Loads expected crack ground truth from `visual_<id>_<trial>.csv`.
+3. Loads expected leak ground truth from `leak_<id>_<trial>.csv`.
+4. Shows a form for leak/crack presence and marker color choices.
+5. Validates all required fields.
+6. Computes score and saves one row to:
+   `C:\CSV\participant_<id>\results_<id>_<trial>.csv`
+7. Closes automatically after successful submit.
+
+### Scoring logic
+
+Total score is 100%:
+
+- leak correct: `33.4%`
+- crack-present value correct: `33.3%`
+- all marker colors correct: `33.3%`
+
+### Results CSV format
+
+`results_<id>_<trial>.csv` includes headers like:
+
+```csv
+timestamp,participant_id,trial_id,leak_present,crack_present,score_percent,marker_0,marker_1,...
+```
+
+### Notes
+
+- the combined version removes the old participant/trial prompt window
+- task reporting depends on both visual inspection output and leak-check output already existing
+
+## Leak Check Details
+
+In the combined workflow, leak check is launched from stage 2 after stage 1 has already established SSH and mount readiness.
+
+### What it does
+
+1. Connects from the Windows laptop to the Raspberry Pi over SSH using password authentication.
+2. Mounts or verifies the Windows SMB share on the Pi at `/mnt/csv`.
+3. Runs preflight checks for:
+   - the Pi conda init script
+   - target folder
+   - leak-check script
+   - `python3`
+   - `setsid`
+   - mount availability
+4. Launches the Raspberry Pi leak-check script inside the configured conda environment.
+5. Supplies `Participant ID` and `Trial` automatically to the remote script.
+6. Shows remote stdout/stderr snippets in the built-in log view.
+7. Lets the operator start and kill the remote process from the combined GUI.
+
+### Raspberry Pi script
+
+The GUI does not perform the leak-check logic itself. It starts a separate Python script on the Raspberry Pi, currently configured as:
+
+- `code_investment.py`
+
+This Raspberry Pi script is the hardware-facing experiment script. It runs on the Pi, talks to the GPIO and MPR121 touch sensor, plays the audio cues, and writes the leak ground-truth CSV used later by the task-reporting workflow.
+
+### How the Raspberry Pi script works
+
+At a high level, the Pi-side script does the following:
+
+1. Prompts for `Participant ID` and `Trial number`.
+2. Checks whether the Windows SMB share is actually mounted at `/mnt/csv`.
+3. Chooses the CSV output directory:
+   - `/mnt/csv` if the Windows share is mounted
+   - otherwise the local script folder on the Pi
+4. Creates:
+   - `participant_<participant_id>/leak_<participant_id>_<trial_number>.csv`
+5. Initializes Raspberry Pi GPIO inputs:
+   - main button on BCM pin `17`
+   - reset button on BCM pin `27`
+6. Uses the MPR121 capacitive touch sensor over I2C.
+7. Loads audio assets for:
+   - touch notification
+   - system notification
+   - recalibration
+   - leak / no-leak outcome audio
+8. Waits for button and touch interaction during the experiment.
+
+### Raspberry Pi interaction logic
+
+The script behavior is roughly:
+
+1. On first button press, it initializes and calibrates the MPR121 sensor.
+2. Once sensor monitoring is enabled, a touch on an electrode starts a looping notification sound.
+3. A short button press while sound is playing stops that sound.
+4. A long button hold (`>= 2` seconds) triggers the leak/no-leak outcome:
+   - randomly chooses `1` for leak or `0` for no leak
+   - writes that single value to the leak CSV
+   - plays the corresponding audio clip
+5. The reset button can reinitialize the sensor again.
+
+### Raspberry Pi script output
+
+The CSV written by the Pi-side leak script contains a single row with the leak ground-truth value:
+
+```csv
+1
+```
+
+or
+
+```csv
+0
+```
+
+This file is later consumed by task reporting as:
+
+- `leak_<participant_id>_<trial_number>.csv`
+
+### Current default Raspberry Pi settings
+
+- SSH host: `192.168.0.148`
+- SSH port: `22`
+- SSH username: `homemicro`
+- Pi conda init: `/home/homemicro/miniconda3/etc/profile.d/conda.sh`
+- Pi conda env: `chrps`
+- remote folder:
+  `/home/homemicro/Investment Experiment/Investment Buzz Wire (old chrps folder)`
+- remote script: `code_investment.py`
+- PID file: `/tmp/raspi_investment.pid`
+- log file: `/tmp/raspi_investment.log`
+
+These settings are for the Windows-side launcher GUI. The actual experiment execution happens on the Raspberry Pi after SSH connection and remote launch.
+
+### IP address note
+
+The IP addresses shown in this README are example values from the current setup and may be different in another lab, router, or session.
+
+In particular, check these before running:
+
+- Raspberry Pi SSH host, currently `192.168.0.148`
+- Windows SMB host, currently `192.168.0.51`
+
+If your network assigns different addresses, update the GUI fields to match your current environment.
+
+### Current default Windows share mount settings
+
+- Windows host: `192.168.0.51`
+- share name: `CSV`
+- Windows username: `Investment`
+- mount point on Pi: `/mnt/csv`
+- SMB version: `3.0`
+
+## Leak Check Setup
+
+### On the Windows laptop
+
+1. Make sure the folder you want to receive leak CSV files is shared over SMB.
+2. Confirm the Windows share is reachable as:
+   `\\192.168.0.51\CSV`
+3. Confirm the Windows username and password used by the Pi for mounting.
+
+### On the Raspberry Pi
+
+1. Confirm SSH access works from the laptop.
+2. Confirm the experiment script runs manually from the Pi in the `chrps` conda environment.
+3. Install CIFS tools if needed:
+
+```bash
+sudo apt update
+sudo apt install cifs-utils -y
+```
+
+4. Confirm the mount point exists:
+
+```bash
+sudo mkdir -p /mnt/csv
+```
+
+5. Confirm the Pi can reach the Windows laptop:
+
+```bash
+ping -c 1 192.168.0.51
+```
+
+## Operator Flow
+
+1. Launch `run_combined_experiment.bat` or run `combined_experiment_GUI.py`.
+2. In stage 1, enter Raspberry Pi SSH credentials.
+3. Enter the Windows share password and Pi sudo password if needed.
+4. Click `Test Connection`.
+5. Confirm the mount is active, or click `Mount Share`.
+6. Continue to stage 2.
+7. Enter `Participant Number` and `Trial Number`.
+8. Start leak check, visual inspection, and task reporting as needed for the session.
+
+## Batch Launchers
+
+The launchers in this repo activate a Conda env named `computer_vision`.
+
+Current activation path inside the BAT files:
+
+```bat
+call "C:\Users\investment\miniconda3\Scripts\activate.bat"
+call conda activate computer_vision
+```
+
+If your Miniconda install path or environment name differs, edit the BAT files.
+
+Example environment setup:
+
+```powershell
+conda create -n computer_vision python=3.10 -y
+conda activate computer_vision
+pip install -r requirements.txt
+```
+
+## Archive Summary
+
+The standalone archived GUIs cover the same three experiment areas:
+
+- `archive/visual_inspection_GUI.py`
+  Creates randomized marker assignments and shows the webcam-based ArUco overlay as a standalone tool.
+- `archive/task_reporting_GUI.py`
+  Collects leak/crack and marker-color responses and writes scored CSV output as a standalone tool.
+- `archive/leak_check_GUI.py`
+  Connects to the Raspberry Pi, mounts the share, and starts the leak-check script as a standalone tool.
+
+The archive also includes:
+
+- standalone `.bat` launchers adjusted for the archived file locations
+- the previous detailed standalone README at `archive/README.md`
+
+## Notes
+
+- `combined_visual_inspection_GUI.py` uses compatibility helpers for multiple OpenCV ArUco API versions.
+- camera index in `combined_visual_inspection_GUI.py` is currently `1`; change `cv2.VideoCapture(1)` if needed.
+- `combined_experiment_GUI.py` relies on password-based SSH through `paramiko`.
+- the combined task GUIs remove the old participant/trial prompt windows because those values are now entered once in the combined launcher.
