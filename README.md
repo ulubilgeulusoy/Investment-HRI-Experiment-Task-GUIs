@@ -17,7 +17,7 @@ The combined GUI brings the full workflow into one application while still using
 - `combined_experiment_GUI.py`
 - `combined_visual_inspection_GUI.py`
 - `combined_task_reporting_GUI.py`
-- `run_combined_experiment.bat`
+- `Experiment Tasks.bat`
 - `requirements.txt`
 
 ### Archive Folder
@@ -54,7 +54,7 @@ python -m pip install -r requirements.txt
 
 Double-click:
 
-- `run_combined_experiment.bat`
+- `Experiment Tasks.bat`
 
 Or run directly:
 
@@ -590,7 +590,7 @@ ping -c 1 192.168.0.51
 
 ## Operator Flow
 
-1. Launch `run_combined_experiment.bat` or run `combined_experiment_GUI.py`.
+1. Launch `Experiment Tasks.bat` or run `combined_experiment_GUI.py`.
 2. In stage 1, enter Raspberry Pi SSH credentials.
 3. Enter the Windows share password and Pi sudo password if needed.
 4. Click `Test Connection`.
