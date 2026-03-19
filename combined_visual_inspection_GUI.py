@@ -91,8 +91,8 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
     participant_id = participant_id or "participant"
     trial_number = trial_number or "trial"
     window_name = "Visual Inspection"
-    initial_width = 1100
-    initial_height = 760
+    initial_width = 825
+    initial_height = 570
 
     # Assign each of 8 markers (ID 0-7) a stable random color with a bias toward green
     # and a hard cap of 3 red markers. We iterate in random order so IDs that go red
