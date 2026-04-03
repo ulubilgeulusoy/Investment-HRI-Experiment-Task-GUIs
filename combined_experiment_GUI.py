@@ -58,7 +58,7 @@ class SSHManager:
 class CombinedExperimentApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Combined Investment Experiment Control")
+        self.root.title("HRI Task GUI")
         self.root.geometry("1200x840")
         self.root.minsize(1040, 760)
 
@@ -116,7 +116,7 @@ class CombinedExperimentApp:
         title_row.pack(fill="x", pady=(0, 12))
         ttk.Label(
             title_row,
-            text="Combined Investment Experiment Control",
+            text="HRI Task GUI",
             font=("Segoe UI", 16, "bold"),
         ).pack(side="left")
         ttk.Label(title_row, textvariable=self.stage_text, font=("Segoe UI", 11, "bold")).pack(side="left", padx=(16, 0))
@@ -240,7 +240,7 @@ class CombinedExperimentApp:
         session_frame = ttk.LabelFrame(frame, text="Session Setup", padding=12)
         session_frame.pack(fill="x", pady=(0, 10))
 
-        ttk.Label(session_frame, text="Participant Number").grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Label(session_frame, text="Participant ID").grid(row=0, column=0, sticky="w", pady=5)
         ttk.Entry(session_frame, textvariable=self.participant_id, width=18).grid(row=0, column=1, sticky="w", padx=8, pady=5)
         ttk.Label(session_frame, text="Trial Number").grid(row=0, column=2, sticky="w", pady=5)
         ttk.Entry(session_frame, textvariable=self.trial_number, width=12).grid(row=0, column=3, sticky="w", padx=8, pady=5)
@@ -254,7 +254,7 @@ class CombinedExperimentApp:
         leak_frame.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
         self.start_leak_button = ttk.Button(leak_frame, text="Start Leak Check", command=self.start_experiment)
         self.start_leak_button.pack(fill="x", pady=(0, 8))
-        ttk.Button(leak_frame, text="Kill Leak Check", command=self.kill_experiment).pack(fill="x")
+        ttk.Button(leak_frame, text="Quit Leak Check", command=self.kill_experiment).pack(fill="x")
 
         visual_frame = ttk.LabelFrame(launch_frame, text="Visual Inspection", padding=10)
         visual_frame.grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
