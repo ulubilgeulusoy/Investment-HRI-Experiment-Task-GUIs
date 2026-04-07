@@ -60,7 +60,9 @@ class CombinedExperimentApp:
         self.root = root
         self.root.title("HRI Task GUI")
         self.root.geometry("1200x840")
-        self.root.minsize(1040, 760)
+        self.stage_one_min_size = (1040, 760)
+        self.stage_two_min_size = (max(600, self.root.winfo_screenwidth() // 2), 760)
+        self.root.minsize(*self.stage_one_min_size)
 
         self.base_dir = Path(__file__).resolve().parent
         self.visual_script = self.base_dir / "combined_visual_inspection_GUI.py"
@@ -299,6 +301,7 @@ class CombinedExperimentApp:
     def _show_stage_one(self):
         self.stage_two_frame.pack_forget()
         self.stage_one_frame.pack(fill="both", expand=True)
+        self.root.minsize(*self.stage_one_min_size)
         self.stage_text.set("SSH + Mount Setup")
         self.root.after(0, lambda: self.stage_canvas.yview_moveto(0))
         if self.stage_two_ready:
@@ -307,6 +310,7 @@ class CombinedExperimentApp:
     def _show_stage_two(self):
         self.stage_one_frame.pack_forget()
         self.stage_two_frame.pack(fill="both", expand=True)
+        self.root.minsize(*self.stage_two_min_size)
         self.stage_text.set("Session Controls")
         self.status_text.set("Stage 2: enter participant/trial values and launch tasks")
         self.stage_two_ready = True
