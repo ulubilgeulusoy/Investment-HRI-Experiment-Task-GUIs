@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=HRI Task GUI
+Comment=Launch the combined HRI experiment task GUI
+Exec=/home/parc/Investment-HRI-Experiment-Task-GUIs/run_experiment.sh
+Path=/home/parc/Investment-HRI-Experiment-Task-GUIs
+Terminal=false
+Icon=utilities-terminal
+Categories=Utility;
