@@ -2,12 +2,15 @@ import argparse
 import ctypes
 from pathlib import Path
 import random
+import sys
 import time
 import tkinter as tk
 from tkinter import messagebox
 
 import cv2
 import cv2.aruco as aruco
+
+from shared_paths import get_participant_dir
 
 # OpenCV renamed a few ArUco helpers; keep compatibility with both APIs.
 def _get_predefined_dict(dict_id):
@@ -32,7 +35,9 @@ def _detect_markers(gray_frame, aruco_dictionary, detector_parameters):
 
 
 def _bring_window_to_front(window_name: str) -> None:
-    """Best-effort attempt to foreground the OpenCV window on Windows."""
+    """Best-effort attempt to foreground the OpenCV window."""
+    if sys.platform != "win32":
+        return
     try:
         user32 = ctypes.windll.user32
         hwnd = user32.FindWindowW(None, window_name)
@@ -45,6 +50,12 @@ def _bring_window_to_front(window_name: str) -> None:
 
 def _position_window_on_right(window_name: str, width: int, height: int) -> None:
     """Place the window near the top-right of the primary display."""
+    if sys.platform != "win32":
+        try:
+            cv2.resizeWindow(window_name, width, height)
+        except Exception:
+            pass
+        return
     try:
         user32 = ctypes.windll.user32
         screen_width = user32.GetSystemMetrics(0)
@@ -69,12 +80,15 @@ def _build_waiting_frame(window_name: str):
 
 
 def _open_camera(device_index: int):
-    """Open the camera using Windows backends that usually initialize fastest."""
+    """Open the camera with a small backend preference list per platform."""
     backends = []
-    if hasattr(cv2, "CAP_DSHOW"):
+
+    if sys.platform == "win32" and hasattr(cv2, "CAP_DSHOW"):
         backends.append(("DirectShow", cv2.CAP_DSHOW))
-    if hasattr(cv2, "CAP_MSMF"):
+    if sys.platform == "win32" and hasattr(cv2, "CAP_MSMF"):
         backends.append(("Media Foundation", cv2.CAP_MSMF))
+    if sys.platform.startswith("linux") and hasattr(cv2, "CAP_V4L2"):
+        backends.append(("V4L2", cv2.CAP_V4L2))
     backends.append(("Default backend", cv2.CAP_ANY))
 
     last_error = None
@@ -152,8 +166,8 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
             marker_colors[marker_id] = (0, 255, 0)  # green
 
     # Export the random assignments for later reference into a participant subfolder.
-    csv_dir = Path(r"C:\CSV") / f"participant_{participant_id}"
-    csv_dir.mkdir(exist_ok=True)
+    csv_dir = get_participant_dir(participant_id)
+    csv_dir.mkdir(parents=True, exist_ok=True)
     color_csv = csv_dir / f"visual_{participant_id}_{trial_number}.csv"
     with color_csv.open("w", encoding="utf-8", newline="") as color_file:
         color_file.write("marker_id,color_name\n")
@@ -167,10 +181,9 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
     _bring_window_to_front(window_name)
     cv2.waitKey(1)
 
-    # Start the webcam feed. On Windows, forcing a backend can avoid very slow
-    # camera enumeration/initialization on some machines.
+    # Start the webcam feed. A preferred backend can reduce camera startup issues.
     try:
-        cap, backend_name = _open_camera(1)
+        cap, backend_name = _open_camera(6)
     except RuntimeError as exc:
         cv2.destroyAllWindows()
         raise SystemExit(str(exc)) from exc

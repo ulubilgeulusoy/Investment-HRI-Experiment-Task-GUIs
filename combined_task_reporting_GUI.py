@@ -9,13 +9,15 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox
 
+from shared_paths import get_participant_dir
+
 
 MAX_LOCATION_PARTS = 8  # kept for CSV shape (locations unused now)
 
 
 def load_reference(participant_id: str, trial_id: str):
     """Load the visual output CSV and derive expected marker colors/crack info."""
-    csv_dir = Path(r"C:\CSV") / f"participant_{participant_id}"
+    csv_dir = get_participant_dir(participant_id)
     csv_path = csv_dir / f"visual_{participant_id}_{trial_id}.csv"
     if not csv_path.exists():
         raise FileNotFoundError(f"Expected file not found: {csv_path.name}")
@@ -45,7 +47,7 @@ def load_reference(participant_id: str, trial_id: str):
 
 def load_leak_reference(participant_id: str, trial_id: str):
     """Load the leak reference CSV; file stores 1 or 0 indicating leak presence."""
-    csv_dir = Path(r"C:\CSV") / f"participant_{participant_id}"
+    csv_dir = get_participant_dir(participant_id)
     csv_path = csv_dir / f"leak_{participant_id}_{trial_id}.csv"
     if not csv_path.exists():
         raise FileNotFoundError(f"Expected file not found: {csv_path.name}")
@@ -253,8 +255,8 @@ if __name__ == "__main__":
     if not pid or not tid:
         raise SystemExit("Participant ID and trial number must be provided by the combined GUI.")
 
-    csv_dir = Path(r"C:\CSV") / f"participant_{pid}"
-    csv_dir.mkdir(exist_ok=True)
+    csv_dir = get_participant_dir(pid)
+    csv_dir.mkdir(parents=True, exist_ok=True)
     data_file = csv_dir / f"results_{pid}_{tid}.csv"
     try:
         reference = load_reference(pid, tid)

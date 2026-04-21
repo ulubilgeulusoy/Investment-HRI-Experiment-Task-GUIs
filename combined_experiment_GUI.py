@@ -81,9 +81,9 @@ class CombinedExperimentApp:
             value="/home/homemicro/Investment Experiment/Investment Buzz Wire (old chrps folder)"
         )
         self.script_name = tk.StringVar(value="code_investment.py")
-        self.windows_host = tk.StringVar(value="192.168.0.51")
+        self.windows_host = tk.StringVar(value="192.168.0.121")
         self.windows_share = tk.StringVar(value="CSV")
-        self.windows_user = tk.StringVar(value="Investment")
+        self.windows_user = tk.StringVar(value="parc")
         self.windows_password = tk.StringVar(value="")
         self.mount_point = tk.StringVar(value="/mnt/csv")
         self.mount_version = tk.StringVar(value="3.0")
@@ -94,7 +94,7 @@ class CombinedExperimentApp:
         self.pid_file = tk.StringVar(value="/tmp/raspi_investment.pid")
         self.log_file = tk.StringVar(value="/tmp/raspi_investment.log")
 
-        self.status_text = tk.StringVar(value="Stage 1: connect to the Raspberry Pi and mount the share")
+        self.status_text = tk.StringVar(value="Stage 1: connect to the Raspberry Pi and mount the CSV share")
         self.stage_text = tk.StringVar(value="SSH + Mount Setup")
         self.ssh_state_text = tk.StringVar(value="Inactive")
         self.mount_state_text = tk.StringVar(value="Inactive")
@@ -151,7 +151,7 @@ class CombinedExperimentApp:
 
         intro = (
             "Stage 1 finishes the Raspberry Pi setup before any participant session starts. "
-            "Use this page to connect over SSH and mount the Windows CSV share."
+            "Use this page to connect over SSH and mount the Ubuntu CSV share on the Raspberry Pi."
         )
         ttk.Label(frame, text=intro, wraplength=920, justify="left").pack(anchor="w", pady=(0, 8))
 
@@ -194,16 +194,16 @@ class CombinedExperimentApp:
         ttk.Entry(remote_frame, textvariable=self.log_file).grid(row=5, column=1, sticky="ew", padx=8, pady=5)
         remote_frame.columnconfigure(1, weight=1)
 
-        mount_frame = ttk.LabelFrame(frame, text="Windows Share Mount", padding=12)
+        mount_frame = ttk.LabelFrame(frame, text="CSV Share Mount", padding=12)
         mount_frame.pack(fill="x", pady=(0, 8))
 
-        ttk.Label(mount_frame, text="Windows Host").grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Label(mount_frame, text="Share Host").grid(row=0, column=0, sticky="w", pady=5)
         ttk.Entry(mount_frame, textvariable=self.windows_host, width=24).grid(row=0, column=1, sticky="ew", padx=8, pady=5)
         ttk.Label(mount_frame, text="Share Name").grid(row=0, column=2, sticky="w", pady=5)
         ttk.Entry(mount_frame, textvariable=self.windows_share, width=20).grid(row=0, column=3, sticky="ew", padx=8, pady=5)
-        ttk.Label(mount_frame, text="Windows User").grid(row=1, column=0, sticky="w", pady=5)
+        ttk.Label(mount_frame, text="Share User").grid(row=1, column=0, sticky="w", pady=5)
         ttk.Entry(mount_frame, textvariable=self.windows_user, width=24).grid(row=1, column=1, sticky="ew", padx=8, pady=5)
-        ttk.Label(mount_frame, text="Windows Password").grid(row=1, column=2, sticky="w", pady=5)
+        ttk.Label(mount_frame, text="Share Password").grid(row=1, column=2, sticky="w", pady=5)
         ttk.Entry(mount_frame, textvariable=self.windows_password, width=20, show="*").grid(
             row=1, column=3, sticky="ew", padx=8, pady=5
         )
@@ -502,7 +502,7 @@ class CombinedExperimentApp:
         mount_version = self.mount_version.get().strip() or "3.0"
 
         if not windows_host or not windows_share or not windows_user or not windows_password or not mount_point:
-            raise ValueError("Windows host, share, username, password, and mount point are required.")
+            raise ValueError("Share host, share name, username, password, and mount point are required.")
 
         share_path = f"//{windows_host}/{windows_share}"
         mount_script = (
@@ -628,14 +628,14 @@ class CombinedExperimentApp:
 
         def after_mount(code, out, err):
             if code == 0:
-                self.status_text.set("Windows share mount command completed")
+                self.status_text.set("CSV share mount command completed")
                 self.refresh_mount_status(on_checked=lambda mount_active: on_success() if mount_active and on_success else None)
             else:
                 self.status_text.set("Mount failed")
                 self._set_mount_state(False)
                 messagebox.showerror(
                     "Mount failed",
-                    "The Windows share mount command failed. Check the log for sudo, share name, or credential issues.",
+                    "The CSV share mount command failed. Check the log for sudo, share name, or credential issues.",
                 )
 
         self.run_ssh_command_async(mount_command, "Mount Share", on_success=after_mount)
@@ -737,7 +737,7 @@ class CombinedExperimentApp:
         self.leak_start_locked = True
         self._set_start_leak_button_enabled(False)
         self.append_log(f"[INFO] Launching leak check for participant {participant}, trial {trial}.\n")
-        self.append_log("[INFO] Mounting Windows share before preflight.\n")
+        self.append_log("[INFO] Mounting CSV share before preflight.\n")
 
         def after_mount():
             self.append_log(
