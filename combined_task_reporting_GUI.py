@@ -72,7 +72,7 @@ class TaskReportingApp(tk.Tk):
         super().__init__()
         self.title("Pipe Inspection Task Reporting")
         self.geometry("620x520")
-        self.resizable(False, False)
+        self.minsize(0, 0)
 
         self.participant_var = tk.StringVar(value=participant_id)
         self.trial_var = tk.StringVar(value=trial_id)
@@ -97,6 +97,10 @@ class TaskReportingApp(tk.Tk):
 
         form = tk.Frame(self, padx=16, pady=8)
         form.pack(fill="both", expand=True)
+        form.columnconfigure(1, weight=1)
+        form.columnconfigure(2, weight=1)
+        form.columnconfigure(3, weight=1)
+        form.rowconfigure(4, weight=1)
 
         # Participant identifier
         tk.Label(form, text="Participant ID").grid(row=0, column=0, sticky="w")
@@ -123,13 +127,16 @@ class TaskReportingApp(tk.Tk):
         # Marker-by-marker color selection
         tk.Label(form, text="Select marker colors").grid(row=4, column=0, sticky="nw", pady=(12, 0))
         markers_frame = tk.Frame(form)
-        markers_frame.grid(row=4, column=1, columnspan=3, sticky="w", pady=(12, 0))
+        markers_frame.grid(row=4, column=1, columnspan=3, sticky="nsew", pady=(12, 0))
+
+        for column in range(4):
+            markers_frame.columnconfigure(column, weight=1)
 
         for idx, marker_id in enumerate(self.reference["all_markers"]):
             row = idx // 4
             col = idx % 4
             slot = tk.Frame(markers_frame, padx=4, pady=4, bd=1, relief="groove")
-            slot.grid(row=row, column=col, padx=4, pady=4, sticky="w")
+            slot.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
             tk.Label(slot, text=f"ID {marker_id}").pack(anchor="w")
             tk.Radiobutton(slot, text="Green", variable=self.marker_vars[marker_id], value="green").pack(anchor="w")
             tk.Radiobutton(slot, text="Red", variable=self.marker_vars[marker_id], value="red").pack(anchor="w")
