@@ -8,6 +8,8 @@ from tkinter import messagebox, ttk
 
 import paramiko
 
+from combined_visual_inspection_GUI import list_available_cameras
+
 
 class SSHManager:
     def __init__(self):
@@ -88,6 +90,9 @@ class CombinedExperimentApp:
 
         self.participant_id = tk.StringVar(value="")
         self.trial_number = tk.StringVar(value="1")
+        self.camera_choice = tk.StringVar(value="")
+        self.camera_options = []
+        self.camera_combo = None
 
         self.pid_file = tk.StringVar(value="/tmp/raspi_investment.pid")
         self.log_file = tk.StringVar(value="/tmp/raspi_investment.log")
@@ -258,12 +263,23 @@ class CombinedExperimentApp:
 
         visual_frame = ttk.LabelFrame(launch_frame, text="Visual Inspection", padding=10)
         visual_frame.grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
+        ttk.Label(visual_frame, text="Camera").pack(anchor="w")
+        self.camera_combo = ttk.Combobox(
+            visual_frame,
+            textvariable=self.camera_choice,
+            state="readonly",
+            width=28,
+        )
+        self.camera_combo.pack(fill="x", pady=(4, 8))
+        ttk.Button(visual_frame, text="Refresh Cameras", command=self.refresh_camera_list).pack(fill="x", pady=(0, 8))
         self.start_visual_button = ttk.Button(
             visual_frame,
             text="Start Visual Inspection",
             command=self.launch_visual_inspection,
         )
         self.start_visual_button.pack(fill="x")
+
+        self.refresh_camera_list()
 
         reporting_frame = ttk.LabelFrame(launch_frame, text="Task Reporting", padding=10)
         reporting_frame.grid(row=0, column=2, sticky="nsew", padx=6, pady=6)
@@ -663,10 +679,16 @@ class CombinedExperimentApp:
 
         try:
             enable_callback(False)
-            process = subprocess.Popen(
-                [sys.executable, str(script_path), "--participant", participant, "--trial", trial],
-                cwd=str(self.base_dir),
-            )
+            command = [sys.executable, str(script_path), "--participant", participant, "--trial", trial]
+            if label == "visual inspection":
+                camera_device = self._get_selected_camera_device()
+                if not camera_device:
+                    messagebox.showerror("Missing camera", "Select a camera before starting visual inspection.")
+                    enable_callback(True)
+                    return
+                command.extend(["--camera", camera_device])
+
+            process = subprocess.Popen(command, cwd=str(self.base_dir))
             setattr(self, attr_name, process)
             self.append_log(f"[INFO] Launched {label} for participant {participant}, trial {trial}.\n")
             self.status_text.set(f"Launched {label}")
@@ -674,6 +696,34 @@ class CombinedExperimentApp:
         except Exception as exc:
             enable_callback(True)
             messagebox.showerror("Launch failed", str(exc))
+
+    def refresh_camera_list(self):
+        cameras = list_available_cameras()
+        self.camera_options = cameras
+        labels = [camera.get("menu_label") or camera["label"] for camera in cameras]
+        if self.camera_combo is not None:
+            self.camera_combo["values"] = labels
+
+        if not cameras:
+            self.camera_choice.set("")
+            return
+
+        selected_device = self._get_selected_camera_device()
+        selected_label = ""
+        for camera in cameras:
+            if str(camera["device"]) == str(selected_device):
+                selected_label = camera.get("menu_label") or camera["label"]
+                break
+
+        self.camera_choice.set(selected_label or (cameras[0].get("menu_label") or cameras[0]["label"]))
+
+    def _get_selected_camera_device(self):
+        selected_label = self.camera_choice.get().strip()
+        for camera in self.camera_options:
+            camera_label = camera.get("menu_label") or camera["label"]
+            if camera_label == selected_label:
+                return str(camera["device"])
+        return ""
 
     def test_connection(self):
         host = self.ssh_host.get().strip()

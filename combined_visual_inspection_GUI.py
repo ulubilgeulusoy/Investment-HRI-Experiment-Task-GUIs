@@ -2,15 +2,23 @@ import argparse
 import ctypes
 from pathlib import Path
 import random
+import re
+import subprocess
 import sys
 import time
 import tkinter as tk
 from tkinter import messagebox
+from typing import Optional
 
 import cv2
 import cv2.aruco as aruco
 
 from shared_paths import get_participant_dir
+
+CAMERA_PORT_ALIASES = {
+    "usb-0000:00:14.0-6.1": "Camera A",
+    "usb-0000:00:14.0-6.2": "Camera B",
+}
 
 # OpenCV renamed a few ArUco helpers; keep compatibility with both APIs.
 def _get_predefined_dict(dict_id):
@@ -79,9 +87,209 @@ def _build_waiting_frame(window_name: str):
     return frame
 
 
-def _open_camera(device_index: int):
+def _format_camera_label(camera_name: str, usb_id: str, device_ref) -> str:
+    alias = CAMERA_PORT_ALIASES.get(usb_id, camera_name)
+    detail = usb_id or str(device_ref)
+    return f"{alias} [{detail}] -> {device_ref}"
+
+
+def _get_camera_menu_label(camera_name: str, usb_id: str) -> str:
+    return CAMERA_PORT_ALIASES.get(usb_id, camera_name)
+
+
+def _parse_camera_index(device_ref) -> Optional[int]:
+    if isinstance(device_ref, int):
+        return device_ref
+    match = re.fullmatch(r"/dev/video(\d+)", str(device_ref).strip())
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _list_cameras_from_v4l2() -> list[dict]:
+    try:
+        result = subprocess.run(
+            ["v4l2-ctl", "--list-devices"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return []
+
+    cameras = []
+    current_name = None
+    current_usb_id = ""
+    current_devices = []
+
+    def flush_current():
+        if not current_name or not current_devices:
+            return
+        video_nodes = sorted(
+            (device for device in current_devices if device.startswith("/dev/video")),
+            key=lambda device: _parse_camera_index(device) if _parse_camera_index(device) is not None else 10**9,
+        )
+        if not video_nodes:
+            return
+        preferred_device = video_nodes[0]
+        cameras.append(
+            {
+                "device": preferred_device,
+                "index": _parse_camera_index(preferred_device),
+                "name": current_name,
+                "usb_id": current_usb_id,
+                "menu_label": _get_camera_menu_label(current_name, current_usb_id),
+                "label": _format_camera_label(current_name, current_usb_id, preferred_device),
+            }
+        )
+
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            flush_current()
+            current_name = None
+            current_usb_id = ""
+            current_devices = []
+            continue
+
+        if not line.startswith("\t"):
+            flush_current()
+            header = line.rstrip(":")
+            usb_match = re.search(r"\(([^()]*)\)$", header)
+            current_usb_id = usb_match.group(1) if usb_match else ""
+            current_name = re.sub(r"\s*\([^()]*\)$", "", header).strip()
+            current_devices = []
+            continue
+
+        current_devices.append(line.strip())
+
+    flush_current()
+    return cameras
+
+
+def _build_linux_camera_label(video_device: Path) -> Optional[dict]:
+    try:
+        resolved = video_device.resolve(strict=True)
+    except Exception:
+        return None
+
+    name_path = Path("/sys/class/video4linux") / video_device.name / "name"
+    try:
+        camera_name = name_path.read_text(encoding="utf-8").strip()
+    except Exception:
+        camera_name = video_device.name
+
+    usb_match = re.search(r"(usb-[^/]+)", str(resolved))
+    usb_id = usb_match.group(1) if usb_match else ""
+    return {
+        "device": str(video_device),
+        "index": _parse_camera_index(str(video_device)),
+        "name": camera_name,
+        "usb_id": usb_id,
+        "menu_label": _get_camera_menu_label(camera_name, usb_id),
+        "label": _format_camera_label(camera_name, usb_id, video_device),
+    }
+
+
+def list_available_cameras() -> list[dict]:
+    cameras = _list_cameras_from_v4l2()
+    if cameras:
+        return cameras
+
+    discovered = []
+    if sys.platform.startswith("linux"):
+        for video_device in sorted(Path("/dev").glob("video*")):
+            camera = _build_linux_camera_label(video_device)
+            if camera is not None:
+                discovered.append(camera)
+
+    if discovered:
+        return discovered
+
+    return [
+        {
+            "device": index,
+            "index": index,
+            "name": f"Camera {index}",
+            "usb_id": "",
+            "menu_label": f"Camera {index}",
+            "label": f"Camera index {index}",
+        }
+        for index in range(8)
+    ]
+
+
+def _select_camera(cameras: list[dict]):
+    if len(cameras) == 1:
+        return cameras[0]
+
+    root = tk.Tk()
+    root.withdraw()
+    dialog = tk.Toplevel(root)
+    dialog.title("Select Camera")
+    dialog.attributes("-topmost", True)
+    dialog.resizable(False, False)
+    dialog.grab_set()
+
+    selected_device = tk.StringVar(value=str(cameras[0]["device"]))
+    result = {"camera": None}
+
+    container = tk.Frame(dialog, padx=14, pady=12)
+    container.pack(fill="both", expand=True)
+
+    tk.Label(
+        container,
+        text="Choose the webcam for visual inspection.",
+        font=("Segoe UI", 11, "bold"),
+        anchor="w",
+        justify="left",
+    ).pack(anchor="w")
+    tk.Label(
+        container,
+        text="Each option shows the camera name, USB port ID, and selected /dev/video node.",
+        anchor="w",
+        justify="left",
+        wraplength=560,
+    ).pack(anchor="w", pady=(6, 10))
+
+    for camera in cameras:
+        tk.Radiobutton(
+            container,
+            text=camera["label"],
+            variable=selected_device,
+            value=str(camera["device"]),
+            anchor="w",
+            justify="left",
+            padx=4,
+        ).pack(anchor="w", fill="x", pady=2)
+
+    button_row = tk.Frame(container)
+    button_row.pack(fill="x", pady=(12, 0))
+
+    def on_confirm():
+        for camera in cameras:
+            if str(camera["device"]) == selected_device.get():
+                result["camera"] = camera
+                break
+        dialog.destroy()
+
+    def on_cancel():
+        dialog.destroy()
+
+    tk.Button(button_row, text="Open Camera", command=on_confirm).pack(side="left")
+    tk.Button(button_row, text="Cancel", command=on_cancel).pack(side="left", padx=(8, 0))
+    dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+    dialog.update_idletasks()
+    dialog.geometry(f"+{max(60, dialog.winfo_screenwidth() // 4)}+{max(60, dialog.winfo_screenheight() // 5)}")
+    root.wait_window(dialog)
+    root.destroy()
+    return result["camera"]
+
+
+def _open_camera(device_ref):
     """Open the camera with a small backend preference list per platform."""
     backends = []
+    device_index = _parse_camera_index(device_ref)
 
     if sys.platform == "win32" and hasattr(cv2, "CAP_DSHOW"):
         backends.append(("DirectShow", cv2.CAP_DSHOW))
@@ -94,7 +302,8 @@ def _open_camera(device_index: int):
     last_error = None
     for backend_name, backend in backends:
         try:
-            cap = cv2.VideoCapture(device_index, backend)
+            source = device_ref if isinstance(device_ref, str) else device_index
+            cap = cv2.VideoCapture(source, backend)
         except Exception as exc:
             last_error = exc
             continue
@@ -118,8 +327,8 @@ def _open_camera(device_index: int):
         cap.release()
 
     if last_error is not None:
-        raise RuntimeError(f"Unable to open camera {device_index}: {last_error}") from last_error
-    raise RuntimeError(f"Unable to open camera {device_index}.")
+        raise RuntimeError(f"Unable to open camera {device_ref}: {last_error}") from last_error
+    raise RuntimeError(f"Unable to open camera {device_ref}.")
 
 
 def _confirm_close_visual_inspection() -> bool:
@@ -141,7 +350,7 @@ aruco_dict = _get_predefined_dict(aruco.DICT_ARUCO_ORIGINAL)
 # Define the parameters for the ArUco marker detection.
 parameters = _create_detector_params()
 
-def run_visual_inspection(participant_id: str, trial_number: str) -> None:
+def run_visual_inspection(participant_id: str, trial_number: str, camera_device=None) -> None:
     participant_id = participant_id or "participant"
     trial_number = trial_number or "trial"
     window_name = "Visual Inspection"
@@ -181,9 +390,29 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
     _bring_window_to_front(window_name)
     cv2.waitKey(1)
 
-    # Start the webcam feed. A preferred backend can reduce camera startup issues.
+    if camera_device:
+        selected_camera = None
+        for camera in list_available_cameras():
+            if str(camera["device"]) == str(camera_device):
+                selected_camera = camera
+                break
+        if selected_camera is None:
+            selected_camera = {
+                "device": camera_device,
+                "index": _parse_camera_index(camera_device),
+                "name": "Selected Camera",
+                "usb_id": "",
+            }
+    else:
+        cameras = list_available_cameras()
+        selected_camera = _select_camera(cameras)
+        if selected_camera is None:
+            cv2.destroyAllWindows()
+            raise SystemExit("Visual inspection cancelled before opening a camera.")
+
+    # Start the webcam feed using the selected device path or fallback index.
     try:
-        cap, backend_name = _open_camera(6)
+        cap, backend_name = _open_camera(selected_camera["device"])
     except RuntimeError as exc:
         cv2.destroyAllWindows()
         raise SystemExit(str(exc)) from exc
@@ -196,7 +425,8 @@ def run_visual_inspection(participant_id: str, trial_number: str) -> None:
     pending_close_confirmation = False
     last_frame = _build_waiting_frame(window_name)
     try:
-        cv2.displayOverlay(window_name, f"Camera opened with {backend_name}", 1500)
+        camera_label = selected_camera["usb_id"] or str(selected_camera["device"])
+        cv2.displayOverlay(window_name, f"{selected_camera['name']} via {backend_name} ({camera_label})", 2000)
     except Exception:
         pass
 
@@ -268,6 +498,7 @@ def _parse_args():
     parser = argparse.ArgumentParser(description="Visual inspection GUI")
     parser.add_argument("--participant", default="", help="Participant ID")
     parser.add_argument("--trial", default="", help="Trial number")
+    parser.add_argument("--camera", default="", help="Camera device path or index")
     return parser.parse_args()
 
 
@@ -279,4 +510,5 @@ if __name__ == "__main__":
     if not participant_id or not trial_number:
         raise SystemExit("Participant ID and trial number must be provided by the combined GUI.")
 
-    run_visual_inspection(participant_id, trial_number)
+    camera_device = args.camera.strip() or None
+    run_visual_inspection(participant_id, trial_number, camera_device)

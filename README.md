@@ -124,6 +124,8 @@ This stage is used during the experiment session. It lets the operator:
 - enter participant number
 - enter trial number
 - start and kill the leak check on the Raspberry Pi
+- choose the visual inspection camera in the Visual Inspection panel
+- refresh the detected local camera list if needed
 - launch visual inspection locally on Ubuntu
 - launch task reporting locally on Ubuntu
 
@@ -132,15 +134,20 @@ This stage is used during the experiment session. It lets the operator:
 `combined_visual_inspection_GUI.py`:
 
 1. uses the participant and trial values passed from the combined GUI
-2. randomly assigns colors to marker IDs `0-7`
-3. writes `visual_<participant>_<trial>.csv` into the participant folder
-4. opens the webcam feed and detects ArUco markers
-5. draws marker outlines and IDs using the assigned colors
+2. accepts the selected camera device from the combined GUI
+3. randomly assigns colors to marker IDs `0-7`
+4. writes `visual_<participant>_<trial>.csv` into the participant folder
+5. opens the webcam feed and detects ArUco markers
+6. draws marker outlines and IDs using the assigned colors
 
 Camera note:
 
-- the script currently opens camera index `1`
-- if the webcam is on a different device, change `cv2.VideoCapture(1)` in `combined_visual_inspection_GUI.py`
+- the camera dropdown is inside the `Visual Inspection` section of stage 2, not in `Session Setup`
+- the dropdown currently shows friendly names `Camera A` and `Camera B`
+- those friendly names map to fixed USB-port aliases in `combined_visual_inspection_GUI.py`
+- internally the app still resolves the real `/dev/video*` device from Linux camera discovery, so the selection remains stable even if camera indexes change
+- the `Refresh Cameras` button repopulates the available local camera list before launch
+- if `combined_visual_inspection_GUI.py` is run directly without a `--camera` argument, it falls back to its own camera picker dialog
 
 ## Task Reporting
 
