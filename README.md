@@ -1,12 +1,12 @@
 # Combined Investment Experiment GUI
 
-This repository is the Ubuntu/Linux version of the combined two-stage experiment launcher.
+This repository contains the Linux two-stage experiment launcher.
 
 The main entry point is:
 
 - `combined_experiment_GUI.py`
 
-The workflow remains the same as the previous setup:
+The workflow is:
 
 - the Raspberry Pi runs the leak-check script remotely over SSH
 - the Raspberry Pi writes the leak CSV into a mounted network share at `/mnt/csv`
@@ -22,7 +22,7 @@ The workflow remains the same as the previous setup:
 - `run_experiment.sh`
 - `requirements.txt`
 
-The `archive/` folder still contains the older standalone scripts and Windows batch launchers for reference only.
+The `archive/` folder contains older standalone scripts kept for reference.
 
 ## Requirements
 
@@ -91,8 +91,6 @@ The active code that controls this is in:
 - `shared_paths.py`
 
 ## Recommended Ubuntu Share Model
-
-Use the same mount-based architecture that already worked well before.
 
 1. Export a folder from Ubuntu, for example `/home/parc/csv` or `/srv/csv`, using Samba.
 2. Mount that share on the Raspberry Pi at `/mnt/csv`.
@@ -168,8 +166,6 @@ It then:
 
 `combined_experiment_GUI.py` does not run the leak-check logic locally. It SSHes into the Raspberry Pi and launches the configured remote script there.
 
-The important part for Linux migration is unchanged:
-
 - the Pi should write to `/mnt/csv`
 - `/mnt/csv` should be the mounted Ubuntu share
 
@@ -196,11 +192,7 @@ The controller currently defaults to these values:
 
 You should update the share host, username, and password fields in the GUI to match the Ubuntu machine exporting the CSV folder.
 
-## Migration Summary
+## Notes
 
-The active code is now aligned with the Linux deployment model:
-
-- local GUI CSV paths no longer use `C:\CSV`
 - the shared local data root is configurable through `shared_paths.py`
-- the controller GUI uses neutral share wording instead of Windows-only wording
-- the repo includes a Linux shell launcher instead of relying on a `.bat` file
+- `run_experiment.sh` is the provided launcher for this branch
