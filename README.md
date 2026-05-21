@@ -436,3 +436,16 @@ You should update the share host, username, and password fields in the GUI to ma
 - the shared local data root is configurable through `shared_paths.py`
 - `run_experiment.sh` is the provided launcher for this branch
 
+## License
+
+This repository's original source code is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+This project depends on third-party Python packages and hardware/software libraries with their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and review upstream license terms before redistributing a bundled application, packaged Python environment, or hardware-facing deployment image.
+
+## Acknowledgments
+
+The Raspberry Pi script example in this README preserves SPDX attribution and license lines from Adafruit example-code context:
+
+- SPDX-FileCopyrightText: 2017 Tony DiCola for Adafruit Industries
+- SPDX-License-Identifier: MIT
+
