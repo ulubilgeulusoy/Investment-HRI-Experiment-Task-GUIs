@@ -642,3 +642,16 @@ The archive also includes:
 - camera index in `combined_visual_inspection_GUI.py` is currently `1`; change `cv2.VideoCapture(1)` if needed.
 - `combined_experiment_GUI.py` relies on password-based SSH through `paramiko`.
 - the combined task GUIs remove the old participant/trial prompt windows because those values are now entered once in the combined launcher.
+
+## License
+
+This repository's original source code is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+This project depends on third-party Python packages and hardware/software libraries with their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and review upstream license terms before redistributing a bundled application, packaged Python environment, or hardware-facing deployment image.
+
+## Acknowledgments
+
+The README includes a Raspberry Pi script example for MPR121 interaction that preserves SPDX attribution and license lines from Adafruit example-code context:
+
+- SPDX-FileCopyrightText: 2017 Tony DiCola for Adafruit Industries
+- SPDX-License-Identifier: MIT
